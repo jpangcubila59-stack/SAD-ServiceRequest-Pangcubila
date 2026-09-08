@@ -34,7 +34,7 @@ function setupEventListeners() {
         newRequestBtn.addEventListener('click', () => openModal('create'));
     }
     
-    // ✅ FIXED: Search Input - Direct event listener
+    // Search Input
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
         console.log('✅ Search input found');
@@ -43,11 +43,15 @@ function setupEventListeners() {
         const newSearchInput = searchInput.cloneNode(true);
         searchInput.parentNode.replaceChild(newSearchInput, searchInput);
         
-        // Add new listener
+        // Add new listener with debounce
+        let searchTimeout;
         newSearchInput.addEventListener('input', function() {
-            const searchTerm = this.value;
-            console.log('🔍 Search triggered with:', searchTerm);
-            loadRequests(); // Call loadRequests directly
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                const searchTerm = this.value;
+                console.log('🔍 Search triggered with:', searchTerm);
+                loadRequests();
+            }, 300);
         });
     } else {
         console.error('❌ Search input not found!');
@@ -108,7 +112,7 @@ function setupEventListeners() {
     });
 }
 
-// ✅ COMPLETELY FIXED: Load Requests with Search and Filters
+// ✅ UPDATED: Load Requests with Search in ALL fields
 async function loadRequests() {
     try {
         const searchInput = document.getElementById('searchInput');
@@ -129,19 +133,19 @@ async function loadRequests() {
             .from('service_requests')
             .select('*');
         
-      // ✅ APPLY SEARCH FILTER - SEARCHES IN ALL FIELDS
-if (searchTerm && searchTerm.trim() !== '') {
-    const trimmedTerm = searchTerm.trim();
-    console.log('✅ Applying search filter for:', trimmedTerm);
-    
-    // Search in requester_name, description, department, AND category
-    query = query.or(
-        `requester_name.ilike.%${trimmedTerm}%,` +
-        `description.ilike.%${trimmedTerm}%,` +
-        `department.ilike.%${trimmedTerm}%,` +
-        `category.ilike.%${trimmedTerm}%`
-    );
-}
+        // ✅ UPDATED: Search in ALL fields (Requester, Department, Category, Description)
+        if (searchTerm && searchTerm.trim() !== '') {
+            const trimmedTerm = searchTerm.trim();
+            console.log('✅ Applying search filter for:', trimmedTerm);
+            
+            // Search in ALL text fields
+            query = query.or(
+                `requester_name.ilike.%${trimmedTerm}%,` +
+                `department.ilike.%${trimmedTerm}%,` +
+                `category.ilike.%${trimmedTerm}%,` +
+                `description.ilike.%${trimmedTerm}%`
+            );
+        }
         
         // Apply status filter
         if (statusValue !== 'All') {
@@ -192,9 +196,10 @@ function renderRequests(requests) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" class="text-center">
-                    <p style="padding: 20px; color: #7f8c8d; font-size: 16px;">
-                        🔍 No requests found matching your criteria
-                    </p>
+                    <div class="no-results">
+                        <span>🔍</span>
+                        No requests found matching your criteria
+                    </div>
                 </td>
             </tr>
         `;
@@ -217,59 +222,6 @@ function renderRequests(requests) {
             </td>
         </tr>
     `).join('');
-    
-    // Add badge styles
-    addBadgeStyles();
-}
-
-// Add badge styles dynamically
-function addBadgeStyles() {
-    const style = document.createElement('style');
-    style.textContent = `
-        .priority-high { 
-            color: #e74c3c; 
-            font-weight: bold; 
-            background: #fde8e8;
-            padding: 3px 8px;
-            border-radius: 4px;
-        }
-        .priority-medium { 
-            color: #f39c12; 
-            font-weight: bold;
-            background: #fef5e7;
-            padding: 3px 8px;
-            border-radius: 4px;
-        }
-        .priority-low { 
-            color: #2ecc71; 
-            font-weight: bold;
-            background: #eafaf1;
-            padding: 3px 8px;
-            border-radius: 4px;
-        }
-        .status-pending { 
-            color: #f39c12; 
-            font-weight: bold;
-            background: #fef5e7;
-            padding: 3px 8px;
-            border-radius: 4px;
-        }
-        .status-in-progress { 
-            color: #3498db; 
-            font-weight: bold;
-            background: #ebf5fb;
-            padding: 3px 8px;
-            border-radius: 4px;
-        }
-        .status-completed { 
-            color: #2ecc71; 
-            font-weight: bold;
-            background: #eafaf1;
-            padding: 3px 8px;
-            border-radius: 4px;
-        }
-    `;
-    document.head.appendChild(style);
 }
 
 // Update Dashboard Stats
@@ -462,20 +414,7 @@ function showMessage(message, type = 'info') {
     if (existing) existing.remove();
     
     const container = document.createElement('div');
-    container.className = 'message-container';
-    container.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 15px 20px;
-        border-radius: 4px;
-        z-index: 2000;
-        max-width: 400px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        background-color: ${type === 'error' ? '#f8d7da' : '#d4edda'};
-        color: ${type === 'error' ? '#721c24' : '#155724'};
-        border: 1px solid ${type === 'error' ? '#f5c6cb' : '#c3e6cb'};
-    `;
+    container.className = `message-container ${type}`;
     container.textContent = message;
     
     document.body.appendChild(container);
