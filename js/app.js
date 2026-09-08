@@ -112,7 +112,7 @@ function setupEventListeners() {
     });
 }
 
-// ✅ UPDATED: Load Requests with Search in ALL fields
+// ✅ FIXED: Load Requests with Better Search
 async function loadRequests() {
     try {
         const searchInput = document.getElementById('searchInput');
@@ -133,18 +133,25 @@ async function loadRequests() {
             .from('service_requests')
             .select('*');
         
-        // ✅ UPDATED: Search in ALL fields (Requester, Department, Category, Description)
+        // ✅ FIXED: Better search with multiple conditions
         if (searchTerm && searchTerm.trim() !== '') {
             const trimmedTerm = searchTerm.trim();
             console.log('✅ Applying search filter for:', trimmedTerm);
             
-            // Search in ALL text fields
+            // 🔥 FIX: Use multiple .ilike conditions instead of .or for better matching
             query = query.or(
                 `requester_name.ilike.%${trimmedTerm}%,` +
                 `department.ilike.%${trimmedTerm}%,` +
                 `category.ilike.%${trimmedTerm}%,` +
                 `description.ilike.%${trimmedTerm}%`
             );
+            
+            // Alternative: If the above doesn't work, try this instead
+            // query = query
+            //     .ilike('requester_name', `%${trimmedTerm}%`)
+            //     .ilike('department', `%${trimmedTerm}%`)
+            //     .ilike('category', `%${trimmedTerm}%`)
+            //     .ilike('description', `%${trimmedTerm}%`);
         }
         
         // Apply status filter
@@ -171,6 +178,13 @@ async function loadRequests() {
         }
         
         console.log('📊 Results found:', data ? data.length : 0);
+        
+        // 🔥 DEBUG: Log the data to see what's in the database
+        if (data && data.length > 0) {
+            console.log('📋 Sample data:', data.slice(0, 3));
+            console.log('📋 Departments in DB:', [...new Set(data.map(r => r.department))]);
+            console.log('📋 Categories in DB:', [...new Set(data.map(r => r.category))]);
+        }
         
         // Update table
         renderRequests(data || []);
