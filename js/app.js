@@ -6,13 +6,19 @@ let deleteTargetId = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 App initializing...');
+    
     currentUser = getCurrentUser();
+    console.log('👤 Current user:', currentUser);
+    
     if (!currentUser && window.location.pathname.includes('dashboard.html')) {
+        console.log('❌ No user found, redirecting to login');
         window.location.href = 'login.html';
         return;
     }
     
     if (document.getElementById('requestsBody')) {
+        console.log('📋 Loading requests...');
         loadRequests();
         setupEventListeners();
     }
@@ -20,34 +26,49 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Setup Event Listeners
 function setupEventListeners() {
+    console.log('🔧 Setting up event listeners...');
+    
     // New Request Button
     const newRequestBtn = document.getElementById('newRequestBtn');
     if (newRequestBtn) {
         newRequestBtn.addEventListener('click', () => openModal('create'));
     }
     
-    // Search Input - ADD DEBOUNCE FOR BETTER PERFORMANCE
+    // ✅ FIXED: Search Input - Direct event listener
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
-        let searchTimeout;
-        searchInput.addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
-                loadRequests();
-            }, 300); // Wait 300ms after user stops typing
+        console.log('✅ Search input found');
+        
+        // Remove any existing listeners by cloning
+        const newSearchInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+        
+        // Add new listener
+        newSearchInput.addEventListener('input', function() {
+            const searchTerm = this.value;
+            console.log('🔍 Search triggered with:', searchTerm);
+            loadRequests(); // Call loadRequests directly
         });
+    } else {
+        console.error('❌ Search input not found!');
     }
     
     // Status Filter
     const statusFilter = document.getElementById('statusFilter');
     if (statusFilter) {
-        statusFilter.addEventListener('change', loadRequests);
+        statusFilter.addEventListener('change', function() {
+            console.log('📊 Status filter changed to:', this.value);
+            loadRequests();
+        });
     }
     
     // Priority Filter
     const priorityFilter = document.getElementById('priorityFilter');
     if (priorityFilter) {
-        priorityFilter.addEventListener('change', loadRequests);
+        priorityFilter.addEventListener('change', function() {
+            console.log('📊 Priority filter changed to:', this.value);
+            loadRequests();
+        });
     }
     
     // Request Form
@@ -87,45 +108,52 @@ function setupEventListeners() {
     });
 }
 
-// ✅ FIXED: Load Requests with Search and Filters
+// ✅ COMPLETELY FIXED: Load Requests with Search and Filters
 async function loadRequests() {
     try {
-        const searchTerm = document.getElementById('searchInput')?.value || '';
-        const statusFilter = document.getElementById('statusFilter')?.value || 'All';
-        const priorityFilter = document.getElementById('priorityFilter')?.value || 'All';
+        const searchInput = document.getElementById('searchInput');
+        const statusFilter = document.getElementById('statusFilter');
+        const priorityFilter = document.getElementById('priorityFilter');
         
-        console.log('🔍 Searching for:', searchTerm); // Debug log
+        // Get values with null checks
+        const searchTerm = searchInput ? searchInput.value : '';
+        const statusValue = statusFilter ? statusFilter.value : 'All';
+        const priorityValue = priorityFilter ? priorityFilter.value : 'All';
         
-        // ✅ FIXED: Build query correctly
+        console.log('🔍 Search term:', searchTerm);
+        console.log('📊 Status filter:', statusValue);
+        console.log('📊 Priority filter:', priorityValue);
+        
+        // Start building the query
         let query = supabaseClient
             .from('service_requests')
             .select('*');
         
-        // ✅ FIXED: Apply search filter - NOW WORKS PROPERLY
+        // ✅ APPLY SEARCH FILTER - This is the important part!
         if (searchTerm && searchTerm.trim() !== '') {
+            const trimmedTerm = searchTerm.trim();
+            console.log('✅ Applying search filter for:', trimmedTerm);
+            
             // Search in requester_name OR description (case-insensitive)
-            query = query.or(
-                `requester_name.ilike.%${searchTerm.trim()}%,` +
-                `description.ilike.%${searchTerm.trim()}%`
-            );
-            console.log('✅ Search filter applied:', searchTerm);
+            query = query.or(`requester_name.ilike.%${trimmedTerm}%,description.ilike.%${trimmedTerm}%`);
         }
         
         // Apply status filter
-        if (statusFilter !== 'All') {
-            query = query.eq('status', statusFilter);
-            console.log('✅ Status filter applied:', statusFilter);
+        if (statusValue !== 'All') {
+            console.log('✅ Applying status filter:', statusValue);
+            query = query.eq('status', statusValue);
         }
         
         // Apply priority filter
-        if (priorityFilter !== 'All') {
-            query = query.eq('priority', priorityFilter);
-            console.log('✅ Priority filter applied:', priorityFilter);
+        if (priorityValue !== 'All') {
+            console.log('✅ Applying priority filter:', priorityValue);
+            query = query.eq('priority', priorityValue);
         }
         
         // Order by most recent first
         query = query.order('created_at', { ascending: false });
         
+        console.log('🔄 Executing query...');
         const { data, error } = await query;
         
         if (error) {
@@ -133,7 +161,7 @@ async function loadRequests() {
             throw error;
         }
         
-        console.log('📊 Found records:', data?.length || 0); // Debug log
+        console.log('📊 Results found:', data ? data.length : 0);
         
         // Update table
         renderRequests(data || []);
@@ -143,7 +171,7 @@ async function loadRequests() {
         
         return data;
     } catch (error) {
-        console.error('Error loading requests:', error);
+        console.error('❌ Error loading requests:', error);
         showMessage('Failed to load requests: ' + error.message, 'error');
     }
 }
@@ -153,12 +181,14 @@ function renderRequests(requests) {
     const tbody = document.getElementById('requestsBody');
     if (!tbody) return;
     
+    console.log('🎨 Rendering', requests.length, 'requests');
+    
     if (!requests || requests.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" class="text-center">
-                    <p style="padding: 20px; color: #7f8c8d;">
-                        🔍 No requests found
+                    <p style="padding: 20px; color: #7f8c8d; font-size: 16px;">
+                        🔍 No requests found matching your criteria
                     </p>
                 </td>
             </tr>
@@ -295,7 +325,7 @@ async function handleFormSubmit(e) {
     const priority = document.getElementById('priority').value;
     const status = document.getElementById('status').value;
     
-    // Validate - BR-01 to BR-06
+    // Validate
     if (!requesterName) {
         showMessage('Requester name is required', 'error');
         return;
@@ -331,7 +361,7 @@ async function handleFormSubmit(e) {
                 .eq('id', id)
                 .eq('user_id', currentUser.id);
         } else {
-            // CREATE - BR-06: New requests automatically get Pending status
+            // CREATE
             result = await supabaseClient
                 .from('service_requests')
                 .insert([{
@@ -421,14 +451,13 @@ async function confirmDeleteRequest() {
     }
 }
 
-// Show Message (Error/Success)
+// Show Message
 function showMessage(message, type = 'info') {
-    // Remove existing message
     const existing = document.querySelector('.message-container');
     if (existing) existing.remove();
     
     const container = document.createElement('div');
-    container.className = `message-container`;
+    container.className = 'message-container';
     container.style.cssText = `
         position: fixed;
         top: 20px;
@@ -446,7 +475,6 @@ function showMessage(message, type = 'info') {
     
     document.body.appendChild(container);
     
-    // Auto-remove after 5 seconds
     setTimeout(() => {
         container.remove();
     }, 5000);
@@ -457,33 +485,6 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-}
-
-// ✅ BONUS: Request Analytics (Optional Challenge)
-async function loadAnalytics() {
-    try {
-        const { data, error } = await supabaseClient
-            .from('service_requests')
-            .select('category, priority');
-        
-        if (error) throw error;
-        
-        // Group by category
-        const categoryStats = {};
-        const priorityStats = {};
-        
-        data.forEach(req => {
-            categoryStats[req.category] = (categoryStats[req.category] || 0) + 1;
-            priorityStats[req.priority] = (priorityStats[req.priority] || 0) + 1;
-        });
-        
-        console.log('📊 Category Stats:', categoryStats);
-        console.log('📊 Priority Stats:', priorityStats);
-        
-        return { categoryStats, priorityStats };
-    } catch (error) {
-        console.error('Error loading analytics:', error);
-    }
 }
 
 // Make functions globally accessible
