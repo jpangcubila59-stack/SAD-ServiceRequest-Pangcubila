@@ -1,4 +1,4 @@
-// Main Application Functions
+// js/app.js
 
 // Variables
 let currentUser = null;
@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Load requests on dashboard
     if (document.getElementById('requestsBody')) {
         loadRequests();
         setupEventListeners();
@@ -27,10 +26,16 @@ function setupEventListeners() {
         newRequestBtn.addEventListener('click', () => openModal('create'));
     }
     
-    // Search Input
+    // Search Input - ADD DEBOUNCE FOR BETTER PERFORMANCE
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
-        searchInput.addEventListener('input', loadRequests);
+        let searchTimeout;
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadRequests();
+            }, 300); // Wait 300ms after user stops typing
+        });
     }
     
     // Status Filter
@@ -82,37 +87,53 @@ function setupEventListeners() {
     });
 }
 
-// Load Requests with Search and Filters
+// ✅ FIXED: Load Requests with Search and Filters
 async function loadRequests() {
     try {
         const searchTerm = document.getElementById('searchInput')?.value || '';
         const statusFilter = document.getElementById('statusFilter')?.value || 'All';
         const priorityFilter = document.getElementById('priorityFilter')?.value || 'All';
         
-        // Build query
+        console.log('🔍 Searching for:', searchTerm); // Debug log
+        
+        // ✅ FIXED: Build query correctly
         let query = supabaseClient
             .from('service_requests')
-            .select('*')
-            .order('created_at', { ascending: false });
+            .select('*');
         
-        // Apply search filter
-        if (searchTerm) {
-            query = query.or(`requester_name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+        // ✅ FIXED: Apply search filter - NOW WORKS PROPERLY
+        if (searchTerm && searchTerm.trim() !== '') {
+            // Search in requester_name OR description (case-insensitive)
+            query = query.or(
+                `requester_name.ilike.%${searchTerm.trim()}%,` +
+                `description.ilike.%${searchTerm.trim()}%`
+            );
+            console.log('✅ Search filter applied:', searchTerm);
         }
         
         // Apply status filter
         if (statusFilter !== 'All') {
             query = query.eq('status', statusFilter);
+            console.log('✅ Status filter applied:', statusFilter);
         }
         
         // Apply priority filter
         if (priorityFilter !== 'All') {
             query = query.eq('priority', priorityFilter);
+            console.log('✅ Priority filter applied:', priorityFilter);
         }
+        
+        // Order by most recent first
+        query = query.order('created_at', { ascending: false });
         
         const { data, error } = await query;
         
-        if (error) throw error;
+        if (error) {
+            console.error('❌ Database error:', error);
+            throw error;
+        }
+        
+        console.log('📊 Found records:', data?.length || 0); // Debug log
         
         // Update table
         renderRequests(data || []);
@@ -123,7 +144,7 @@ async function loadRequests() {
         return data;
     } catch (error) {
         console.error('Error loading requests:', error);
-        showMessage('Failed to load requests', 'error');
+        showMessage('Failed to load requests: ' + error.message, 'error');
     }
 }
 
@@ -133,7 +154,15 @@ function renderRequests(requests) {
     if (!tbody) return;
     
     if (!requests || requests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center">No requests found</td></tr>';
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center">
+                    <p style="padding: 20px; color: #7f8c8d;">
+                        🔍 No requests found
+                    </p>
+                </td>
+            </tr>
+        `;
         return;
     }
     
@@ -154,7 +183,7 @@ function renderRequests(requests) {
         </tr>
     `).join('');
     
-    // Add some inline styles for priority and status badges
+    // Add badge styles
     addBadgeStyles();
 }
 
@@ -162,12 +191,48 @@ function renderRequests(requests) {
 function addBadgeStyles() {
     const style = document.createElement('style');
     style.textContent = `
-        .priority-high { color: #e74c3c; font-weight: bold; }
-        .priority-medium { color: #f39c12; font-weight: bold; }
-        .priority-low { color: #2ecc71; font-weight: bold; }
-        .status-pending { color: #f39c12; font-weight: bold; }
-        .status-in-progress { color: #3498db; font-weight: bold; }
-        .status-completed { color: #2ecc71; font-weight: bold; }
+        .priority-high { 
+            color: #e74c3c; 
+            font-weight: bold; 
+            background: #fde8e8;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .priority-medium { 
+            color: #f39c12; 
+            font-weight: bold;
+            background: #fef5e7;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .priority-low { 
+            color: #2ecc71; 
+            font-weight: bold;
+            background: #eafaf1;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .status-pending { 
+            color: #f39c12; 
+            font-weight: bold;
+            background: #fef5e7;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .status-in-progress { 
+            color: #3498db; 
+            font-weight: bold;
+            background: #ebf5fb;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .status-completed { 
+            color: #2ecc71; 
+            font-weight: bold;
+            background: #eafaf1;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -230,7 +295,7 @@ async function handleFormSubmit(e) {
     const priority = document.getElementById('priority').value;
     const status = document.getElementById('status').value;
     
-    // Validate
+    // Validate - BR-01 to BR-06
     if (!requesterName) {
         showMessage('Requester name is required', 'error');
         return;
@@ -244,7 +309,7 @@ async function handleFormSubmit(e) {
         return;
     }
     if (!description || description.length < 5) {
-        showMessage('Description must contain sufficient information', 'error');
+        showMessage('Description must contain sufficient information (min 5 chars)', 'error');
         return;
     }
     
@@ -264,9 +329,9 @@ async function handleFormSubmit(e) {
                     status: status
                 })
                 .eq('id', id)
-                .eq('user_id', currentUser.id); // RLS will enforce this
+                .eq('user_id', currentUser.id);
         } else {
-            // CREATE
+            // CREATE - BR-06: New requests automatically get Pending status
             result = await supabaseClient
                 .from('service_requests')
                 .insert([{
@@ -275,16 +340,19 @@ async function handleFormSubmit(e) {
                     category: category,
                     description: description,
                     priority: priority,
-                    status: 'Pending', // BR-06: New requests automatically get Pending status
+                    status: 'Pending',
                     user_id: currentUser.id
                 }]);
         }
         
-        if (result.error) throw result.error;
+        if (result.error) {
+            console.error('❌ Database error:', result.error);
+            throw result.error;
+        }
         
         closeModal();
         loadRequests();
-        showMessage(id ? 'Request updated successfully!' : 'Request created successfully!', 'success');
+        showMessage(id ? '✅ Request updated successfully!' : '✅ Request created successfully!', 'success');
         
     } catch (error) {
         console.error('Error saving request:', error);
@@ -293,17 +361,16 @@ async function handleFormSubmit(e) {
 }
 
 // Edit Request
-function editRequest(id) {
-    // Find the request in the current table data
-    const rows = document.querySelectorAll('#requestsBody tr');
-    let requestData = null;
-    
-    // Since we don't have the full data object easily, we'll fetch it
-    fetchRequest(id).then(data => {
+async function editRequest(id) {
+    try {
+        const data = await fetchRequest(id);
         if (data) {
             openModal('edit', data);
         }
-    });
+    } catch (error) {
+        console.error('Error fetching request:', error);
+        showMessage('Failed to fetch request details', 'error');
+    }
 }
 
 // Fetch Single Request
@@ -346,7 +413,7 @@ async function confirmDeleteRequest() {
         document.getElementById('deleteModal').style.display = 'none';
         deleteTargetId = null;
         loadRequests();
-        showMessage('Request deleted successfully!', 'success');
+        showMessage('✅ Request deleted successfully!', 'success');
         
     } catch (error) {
         console.error('Error deleting request:', error);
@@ -361,7 +428,7 @@ function showMessage(message, type = 'info') {
     if (existing) existing.remove();
     
     const container = document.createElement('div');
-    container.className = `message-container ${type}-message`;
+    container.className = `message-container`;
     container.style.cssText = `
         position: fixed;
         top: 20px;
@@ -371,6 +438,9 @@ function showMessage(message, type = 'info') {
         z-index: 2000;
         max-width: 400px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        background-color: ${type === 'error' ? '#f8d7da' : '#d4edda'};
+        color: ${type === 'error' ? '#721c24' : '#155724'};
+        border: 1px solid ${type === 'error' ? '#f5c6cb' : '#c3e6cb'};
     `;
     container.textContent = message;
     
@@ -389,7 +459,7 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// For bonus challenge: Request Analytics
+// ✅ BONUS: Request Analytics (Optional Challenge)
 async function loadAnalytics() {
     try {
         const { data, error } = await supabaseClient
@@ -403,14 +473,12 @@ async function loadAnalytics() {
         const priorityStats = {};
         
         data.forEach(req => {
-            // Category
             categoryStats[req.category] = (categoryStats[req.category] || 0) + 1;
-            // Priority
             priorityStats[req.priority] = (priorityStats[req.priority] || 0) + 1;
         });
         
-        // Display analytics
-        displayAnalytics(categoryStats, priorityStats);
+        console.log('📊 Category Stats:', categoryStats);
+        console.log('📊 Priority Stats:', priorityStats);
         
         return { categoryStats, priorityStats };
     } catch (error) {
@@ -418,10 +486,6 @@ async function loadAnalytics() {
     }
 }
 
-// Display Analytics (Bonus)
-function displayAnalytics(categoryStats, priorityStats) {
-    // This function can be implemented to show charts or stats
-    // For simplicity, we'll just log to console
-    console.log('Category Stats:', categoryStats);
-    console.log('Priority Stats:', priorityStats);
-}
+// Make functions globally accessible
+window.editRequest = editRequest;
+window.deleteRequest = deleteRequest;
