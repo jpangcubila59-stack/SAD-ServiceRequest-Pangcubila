@@ -112,7 +112,7 @@ function setupEventListeners() {
     });
 }
 
-// ✅ FIXED: Load Requests with Better Search
+// ✅ Load Requests with Search and Filters
 async function loadRequests() {
     try {
         const searchInput = document.getElementById('searchInput');
@@ -133,25 +133,18 @@ async function loadRequests() {
             .from('service_requests')
             .select('*');
         
-        // ✅ FIXED: Better search with multiple conditions
+        // Apply search filter
         if (searchTerm && searchTerm.trim() !== '') {
             const trimmedTerm = searchTerm.trim();
             console.log('✅ Applying search filter for:', trimmedTerm);
             
-            // 🔥 FIX: Use multiple .ilike conditions instead of .or for better matching
+            // Search in ALL text fields
             query = query.or(
                 `requester_name.ilike.%${trimmedTerm}%,` +
                 `department.ilike.%${trimmedTerm}%,` +
                 `category.ilike.%${trimmedTerm}%,` +
                 `description.ilike.%${trimmedTerm}%`
             );
-            
-            // Alternative: If the above doesn't work, try this instead
-            // query = query
-            //     .ilike('requester_name', `%${trimmedTerm}%`)
-            //     .ilike('department', `%${trimmedTerm}%`)
-            //     .ilike('category', `%${trimmedTerm}%`)
-            //     .ilike('description', `%${trimmedTerm}%`);
         }
         
         // Apply status filter
@@ -179,13 +172,6 @@ async function loadRequests() {
         
         console.log('📊 Results found:', data ? data.length : 0);
         
-        // 🔥 DEBUG: Log the data to see what's in the database
-        if (data && data.length > 0) {
-            console.log('📋 Sample data:', data.slice(0, 3));
-            console.log('📋 Departments in DB:', [...new Set(data.map(r => r.department))]);
-            console.log('📋 Categories in DB:', [...new Set(data.map(r => r.category))]);
-        }
-        
         // Update table
         renderRequests(data || []);
         
@@ -199,7 +185,7 @@ async function loadRequests() {
     }
 }
 
-// Render Requests Table
+// ✅ Render Requests Table with ALL Fields
 function renderRequests(requests) {
     const tbody = document.getElementById('requestsBody');
     if (!tbody) return;
@@ -209,7 +195,7 @@ function renderRequests(requests) {
     if (!requests || requests.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center">
+                <td colspan="9" class="text-center">
                     <div class="no-results">
                         <span>🔍</span>
                         No requests found matching your criteria
@@ -222,12 +208,14 @@ function renderRequests(requests) {
     
     tbody.innerHTML = requests.map(request => `
         <tr>
-            <td>${request.id}</td>
+            <td><strong>${request.id}</strong></td>
             <td>${escapeHtml(request.requester_name)}</td>
             <td>${escapeHtml(request.department)}</td>
             <td>${escapeHtml(request.category)}</td>
+            <td>${escapeHtml(request.description)}</td>
             <td><span class="priority-${request.priority.toLowerCase()}">${request.priority}</span></td>
             <td><span class="status-${request.status.toLowerCase().replace(' ', '-')}">${request.status}</span></td>
+            <td>${formatDate(request.created_at)}</td>
             <td>
                 <div class="action-buttons">
                     <button class="btn btn-primary" onclick="editRequest(${request.id})">Edit</button>
@@ -236,6 +224,20 @@ function renderRequests(requests) {
             </td>
         </tr>
     `).join('');
+}
+
+// ✅ Format Date Helper Function
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
 }
 
 // Update Dashboard Stats
@@ -251,19 +253,30 @@ function updateDashboardStats(requests) {
     document.getElementById('completedRequests').textContent = completed;
 }
 
-// Open Modal for Create or Edit
+// ✅ Open Modal for Create or Edit with ALL Fields
 function openModal(mode, data = null) {
     const modal = document.getElementById('requestModal');
     const title = document.getElementById('modalTitle');
     const form = document.getElementById('requestForm');
     
     if (mode === 'create') {
-        title.textContent = 'New Service Request';
+        title.textContent = '➕ New Service Request';
         form.reset();
         document.getElementById('status').value = 'Pending';
         document.getElementById('requestId').value = '';
+        // Clear any previous data
+        document.getElementById('requesterName').value = '';
+        document.getElementById('department').value = '';
+        document.getElementById('category').value = '';
+        document.getElementById('description').value = '';
+        document.getElementById('priority').value = 'Medium';
+        // Hide auto-generated fields
+        document.getElementById('autoFields').style.display = 'block';
+        document.getElementById('autoId').textContent = 'Auto-generated';
+        document.getElementById('autoDate').textContent = formatDate(new Date().toISOString());
+        document.getElementById('autoUser').textContent = currentUser ? currentUser.email : 'Current User';
     } else if (mode === 'edit' && data) {
-        title.textContent = 'Edit Service Request';
+        title.textContent = '✏️ Edit Service Request';
         document.getElementById('requestId').value = data.id;
         document.getElementById('requesterName').value = data.requester_name;
         document.getElementById('department').value = data.department;
@@ -271,6 +284,11 @@ function openModal(mode, data = null) {
         document.getElementById('description').value = data.description;
         document.getElementById('priority').value = data.priority;
         document.getElementById('status').value = data.status;
+        // Show auto-generated fields (read-only)
+        document.getElementById('autoFields').style.display = 'block';
+        document.getElementById('autoId').textContent = data.id;
+        document.getElementById('autoDate').textContent = formatDate(data.created_at);
+        document.getElementById('autoUser').textContent = currentUser ? currentUser.email : 'Current User';
     }
     
     modal.style.display = 'flex';
@@ -284,10 +302,11 @@ function closeModal() {
     });
 }
 
-// Handle Form Submit (Create/Update)
+// ✅ Handle Form Submit (Create/Update) with ALL Fields
 async function handleFormSubmit(e) {
     e.preventDefault();
     
+    // Get all form values
     const id = document.getElementById('requestId').value;
     const requesterName = document.getElementById('requesterName').value.trim();
     const department = document.getElementById('department').value.trim();
@@ -296,21 +315,25 @@ async function handleFormSubmit(e) {
     const priority = document.getElementById('priority').value;
     const status = document.getElementById('status').value;
     
-    // Validate
+    // ✅ Validate ALL required fields (BR-01 to BR-06)
     if (!requesterName) {
-        showMessage('Requester name is required', 'error');
+        showMessage('❌ Requester name is required', 'error');
         return;
     }
     if (!department) {
-        showMessage('Department is required', 'error');
+        showMessage('❌ Department is required', 'error');
         return;
     }
     if (!category) {
-        showMessage('Category is required', 'error');
+        showMessage('❌ Category is required', 'error');
         return;
     }
     if (!description || description.length < 5) {
-        showMessage('Description must contain sufficient information (min 5 chars)', 'error');
+        showMessage('❌ Description must contain sufficient information (min 5 characters)', 'error');
+        return;
+    }
+    if (!priority) {
+        showMessage('❌ Priority must be selected', 'error');
         return;
     }
     
@@ -318,7 +341,7 @@ async function handleFormSubmit(e) {
         let result;
         
         if (id) {
-            // UPDATE
+            // ✅ UPDATE: Can modify requester_name, department, category, description, priority, status
             result = await supabaseClient
                 .from('service_requests')
                 .update({
@@ -332,7 +355,7 @@ async function handleFormSubmit(e) {
                 .eq('id', id)
                 .eq('user_id', currentUser.id);
         } else {
-            // CREATE
+            // ✅ CREATE: All fields + auto-generated fields
             result = await supabaseClient
                 .from('service_requests')
                 .insert([{
@@ -341,8 +364,10 @@ async function handleFormSubmit(e) {
                     category: category,
                     description: description,
                     priority: priority,
-                    status: 'Pending',
-                    user_id: currentUser.id
+                    status: 'Pending', // BR-06: New requests auto-set to Pending
+                    user_id: currentUser.id // BR-07: User ID from logged-in user
+                    // id: Auto-generated (BR-01)
+                    // created_at: Auto-recorded (BR-09)
                 }]);
         }
         
@@ -353,11 +378,14 @@ async function handleFormSubmit(e) {
         
         closeModal();
         loadRequests();
-        showMessage(id ? '✅ Request updated successfully!' : '✅ Request created successfully!', 'success');
+        showMessage(
+            id ? '✅ Request #' + id + ' updated successfully!' : '✅ New request created successfully!',
+            'success'
+        );
         
     } catch (error) {
         console.error('Error saving request:', error);
-        showMessage('Failed to save request: ' + error.message, 'error');
+        showMessage('❌ Failed to save request: ' + error.message, 'error');
     }
 }
 
@@ -392,7 +420,7 @@ async function fetchRequest(id) {
     }
 }
 
-// Delete Request (Show Confirmation)
+// Delete Request (Show Confirmation) - BR-08
 function deleteRequest(id) {
     deleteTargetId = id;
     document.getElementById('deleteModal').style.display = 'flex';
@@ -407,7 +435,7 @@ async function confirmDeleteRequest() {
             .from('service_requests')
             .delete()
             .eq('id', deleteTargetId)
-            .eq('user_id', currentUser.id);
+            .eq('user_id', currentUser.id); // BR-10: Prevent unauthorized deletion
         
         if (error) throw error;
         
