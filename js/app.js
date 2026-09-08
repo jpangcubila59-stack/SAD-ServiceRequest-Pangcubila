@@ -129,14 +129,19 @@ async function loadRequests() {
             .from('service_requests')
             .select('*');
         
-        // ✅ APPLY SEARCH FILTER - This is the important part!
-        if (searchTerm && searchTerm.trim() !== '') {
-            const trimmedTerm = searchTerm.trim();
-            console.log('✅ Applying search filter for:', trimmedTerm);
-            
-            // Search in requester_name OR description (case-insensitive)
-            query = query.or(`requester_name.ilike.%${trimmedTerm}%,description.ilike.%${trimmedTerm}%`);
-        }
+      // ✅ APPLY SEARCH FILTER - SEARCHES IN ALL FIELDS
+if (searchTerm && searchTerm.trim() !== '') {
+    const trimmedTerm = searchTerm.trim();
+    console.log('✅ Applying search filter for:', trimmedTerm);
+    
+    // Search in requester_name, description, department, AND category
+    query = query.or(
+        `requester_name.ilike.%${trimmedTerm}%,` +
+        `description.ilike.%${trimmedTerm}%,` +
+        `department.ilike.%${trimmedTerm}%,` +
+        `category.ilike.%${trimmedTerm}%`
+    );
+}
         
         // Apply status filter
         if (statusValue !== 'All') {
